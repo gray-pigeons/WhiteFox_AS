@@ -22,6 +22,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
+    <!-- API 33 或更高时 发布通知需要持有 添加通知权限 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
         android:usesCleartextTraffic="true"
         android:allowBackup="true"
