@@ -27,6 +27,15 @@ jobs:
     - name: Build with Gradle
       run: ./gradlew assembleRelease 
     # run: ./gradlew build
+
+        
+    # 添加构建证明步骤（在构建完成后，上传 APK 前）
+    - name: Attest build provenance
+      uses: actions/attest-build-provenance@v1      
+      with:
+        repository: ${{ github.repository }}
+        commit: ${{ github.sha }}
+        ref: ${{ github.ref }}
       
     # 保存生成的 APK 文件
     - name: Upload Release APK
