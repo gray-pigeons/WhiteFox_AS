@@ -3,7 +3,10 @@ package com.flying.whitefox.service;
 
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
 import com.flying.whitefox.data.model.music.PlaylistData;
+import com.flying.whitefox.data.model.music.QualityLevel;
 import com.flying.whitefox.data.model.music.SongData;
 import com.flying.whitefox.utils.config.RequestURLConfig;
 import com.google.gson.Gson;
@@ -92,7 +95,7 @@ public class MusicService {
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (call.isCanceled()) {
                     Log.d(TAG, "请求被取消");
                     future.complete(null);
@@ -153,7 +156,7 @@ public class MusicService {
                             for (int i = 0; i < tracksArray.length(); i++) {
                                 JSONObject trackObj = tracksArray.getJSONObject(i);
                                 PlaylistData.Song song = new PlaylistData.Song();
-                                song.id = trackObj.optInt("id", 0);
+                                song.id = trackObj.optString("id", "0");
                                 song.name = trackObj.optString("name", "未知歌曲");
 
                                 // 解析艺术家信息 - 支持多种格式
@@ -272,13 +275,13 @@ public class MusicService {
 
         client.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, IOException e) {
                 Log.e(TAG, "获取歌单信息失败", e);
                 future.complete(null);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (!response.isSuccessful()) {
                     Log.e(TAG, "获取歌单信息失败: " + response.code());
                     future.complete(null);
@@ -286,6 +289,7 @@ public class MusicService {
                 }
 
                 try {
+                    assert response.body() != null;
                     String responseData = response.body().string();
                     Log.d(TAG, "获取到的原始数据: " + responseData.substring(0, Math.min(responseData.length(), 200)) + "...");
                     
@@ -318,7 +322,7 @@ public class MusicService {
                                 JsonObject trackObj = tracksArray.get(i).getAsJsonObject();
                                 PlaylistData.Song song = new PlaylistData.Song();
                                 
-                                song.id = trackObj.has("id") ? trackObj.get("id").getAsInt() : 0;
+                                song.id = trackObj.has("id") ? trackObj.get("id").getAsString() : "0";
                                 song.name = trackObj.has("name") ? trackObj.get("name").getAsString() : "未知歌曲";
                                 
                                 // 解析艺术家
@@ -365,24 +369,40 @@ public class MusicService {
      * 获取歌曲播放链接
      *
      @param songId 网易云歌曲 ID
-     @param level  比特率
+     @param level  音质级别
      */
-    public static Future<SongData> getSongUrl(int songId, String level) {
+    public static Future<SongData> getSongUrl(String songId, QualityLevel level) {
         CompletableFuture<SongData> future = new CompletableFuture<>();
-        
+        if (songId.isEmpty() || songId.equals("0"))
+        {
+            future.complete(null);
+            return null;
+        }
         // 尝试多个代理URL
         String[] proxyUrls = {
-            PROXY_URL + "?ids=" + songId + "&level=" + level + "&type=json",
+            PROXY_URL + "?ids=" + songId + "&level=" + level.getValue() + "&type=json",
             RequestURLConfig.getMusicAnalysisAggregation + "?id=" + songId + "&media=netease&type=url",
         };
         
-        tryNextProxyUrl(proxyUrls, 0, future, songId, level);
+        tryNextProxyUrl(proxyUrls, 0, future, songId, level.getValue());
         return future;
     }
     
-    private static void tryNextProxyUrl(String[] proxyUrls, int index, CompletableFuture<SongData> future, 
-                                       int songId, String level) {
+    // 添加一个重载方法，使用默认音质
+    public static Future<SongData> getSongUrl(String songId) {
+        return getSongUrl(songId, QualityLevel.STANDARD);
+    }
+
+    private static void tryNextProxyUrl(String[] proxyUrls, int index, CompletableFuture<SongData> future,
+                                        String songId, String level) {
         if (index >= proxyUrls.length) {
+            if (songId.contains("-"))
+            {
+                songId = songId.replace("-", "");
+                tryNextProxyUrl(proxyUrls, 0, future, songId, level);
+                return;
+            }
+
             Log.e(TAG, "所有代理URL都尝试失败");
             future.complete(null);
             return;
@@ -397,24 +417,26 @@ public class MusicService {
                 .addHeader("Referer", "https://music.163.com")
                 .build();
 
+        String finalSongId = songId;
         client.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e(TAG, "获取歌曲链接失败 URL[" + index + "]: " + url, e);
                 // 尝试下一个URL
-                tryNextProxyUrl(proxyUrls, index + 1, future, songId, level);
+                tryNextProxyUrl(proxyUrls, index + 1, future, finalSongId, level);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (!response.isSuccessful()) {
                     Log.e(TAG, "获取歌曲链接失败 URL[" + index + "]: " + url + ", code: " + response.code());
                     // 尝试下一个URL
-                    tryNextProxyUrl(proxyUrls, index + 1, future, songId, level);
+                    tryNextProxyUrl(proxyUrls, index + 1, future, finalSongId, level);
                     return;
                 }
 
                 try {
+                    assert response.body() != null;
                     String responseData = response.body().string();
                     Log.d(TAG, "Song URL response data[" + index + "]: " + responseData);
 
@@ -422,7 +444,7 @@ public class MusicService {
                     if (responseData.contains("\"status\": 400") || responseData.contains("信息获取不完整")) {
                         Log.e(TAG, "获取歌曲链接失败，信息不完整 URL[" + index + "]");
                         // 尝试下一个URL
-                        tryNextProxyUrl(proxyUrls, index + 1, future, songId, level);
+                        tryNextProxyUrl(proxyUrls, index + 1, future, finalSongId, level);
                         return;
                     }
 
@@ -462,12 +484,12 @@ public class MusicService {
                     } else {
                         Log.e(TAG, "解析歌曲信息失败 URL[" + index + "]");
                         // 尝试下一个URL
-                        tryNextProxyUrl(proxyUrls, index + 1, future, songId, level);
+                        tryNextProxyUrl(proxyUrls, index + 1, future, finalSongId, level);
                     }
                 } catch (JSONException e) {
                     Log.e(TAG, "解析歌曲信息失败 URL[" + index + "]", e);
                     // 尝试下一个URL
-                    tryNextProxyUrl(proxyUrls, index + 1, future, songId, level);
+                    tryNextProxyUrl(proxyUrls, index + 1, future, finalSongId, level);
                 }
             }
         });
@@ -489,13 +511,13 @@ public class MusicService {
 
         client.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, IOException e) {
                 Log.e(TAG, "搜索歌曲失败", e);
                 future.complete(null);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (!response.isSuccessful()) {
                     Log.e(TAG, "搜索歌曲失败: " + response.code());
                     future.complete(null);
@@ -503,6 +525,7 @@ public class MusicService {
                 }
 
                 try {
+                    assert response.body() != null;
                     String responseData = response.body().string();
                     JSONObject jsonObject = new JSONObject(responseData);
                     // 检查返回的数据结构
@@ -515,7 +538,7 @@ public class MusicService {
                         for (int i = 0; i < songsArray.length(); i++) {
                             JSONObject songObj = songsArray.getJSONObject(i);
                             PlaylistData.Song song = new PlaylistData.Song();
-                            song.id = songObj.optInt("songid", 0);
+                            song.id = songObj.optString("songid", "0");
                             song.name = songObj.optString("songname", "未知歌曲");
                             song.ar_name = songObj.optString("artistname", "未知歌手");
                             song.al_name = songObj.optString("albumname", "未知专辑");

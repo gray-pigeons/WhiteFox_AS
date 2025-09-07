@@ -8,6 +8,7 @@
 
     <View
         android:id="@+id/indicator"
+        android:paddingTop="50dp"
         android:layout_width="3dp"
         android:layout_height="match_parent"
         android:background="#2196F3"
@@ -15,6 +16,7 @@
         android:visibility="gone" />
 
     <LinearLayout
+        android:paddingTop="50dp"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"

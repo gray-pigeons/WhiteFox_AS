@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.flying.whitefox.R;
 import com.flying.whitefox.data.model.music.PlaylistData;
+import com.flying.whitefox.data.model.music.QualityLevel;
 import com.flying.whitefox.data.model.music.SongData;
 import com.flying.whitefox.service.MusicService;
 
@@ -76,8 +77,9 @@ public class PlaylistActivity extends AppCompatActivity {
 
         // 在后台线程获取歌曲播放链接
         new Thread(() -> {
-            Future<SongData> future = MusicService.getSongUrl(song.id, "standard");
+            Future<SongData> future = MusicService.getSongUrl(song.id, QualityLevel.STANDARD);
             try {
+                assert future != null;
                 SongData songData = future.get();
                 if (songData != null && (songData.status == 200 || (songData.getUrl() != null && !songData.getUrl().isEmpty()))) {
                     // 返回结果给DashboardFragment

@@ -17,7 +17,7 @@ import androidx.fragment.app.Fragment;
 import com.flying.whitefox.R;
 import com.flying.whitefox.data.model.home.GridItemData;
 import com.flying.whitefox.data.model.home.NavDataResponse;
-import com.flying.whitefox.data.network.NetworkManager;
+import com.flying.whitefox.utils.network.NetworkManager;
 import com.flying.whitefox.databinding.FragmentHomeBinding;
 import com.flying.whitefox.ui.webview.WebViewActivity;
 
@@ -134,22 +134,12 @@ public class HomeFragment extends Fragment {
         functionItems.clear();
 
         GridItemData item1 = new GridItemData();
-        item1.setText("功能1");
+        item1.setText("热点资讯");
         item1.setIcon("ic_dashboard_black_24dp");
+        item1.setUrl("https://newsnow.busiyi.world");
         item1.setShow(true);
         functionItems.add(item1);
 
-        GridItemData item2 = new GridItemData();
-        item2.setText("功能2");
-        item2.setIcon("ic_dashboard_black_24dp");
-        item2.setShow(true);
-        functionItems.add(item2);
-
-        GridItemData item3 = new GridItemData();
-        item3.setText("功能3");
-        item3.setIcon("ic_dashboard_black_24dp");
-        item3.setShow(true);
-        functionItems.add(item3);
     }
 
     /**

@@ -14,26 +14,26 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:paddingStart="16dp"
-        android:paddingEnd="16dp"
         android:paddingTop="8dp"
+        android:paddingEnd="16dp"
         android:paddingBottom="8dp">
 
         <Button
             android:id="@+id/btn_import_playlist"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:layout_marginEnd="8dp"
+            android:layout_weight="1"
             android:text="导入歌单"
             android:textSize="12sp" />
 
         <Button
-            android:id="@+id/btn_default_playlist"
+            android:id="@+id/btn_refresh"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:layout_marginStart="8dp"
-            android:text="默认歌单"
+            android:layout_weight="1"
+            android:text="刷新歌单"
             android:textSize="12sp" />
 
     </LinearLayout>
@@ -94,9 +94,9 @@
                 android:id="@+id/progress_bar"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp" />
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1" />
 
             <TextView
                 android:id="@+id/total_time"
@@ -146,27 +146,17 @@
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:src="@android:drawable/ic_media_next" />
 
+            <!-- 播放列表入口按钮 -->
             <ImageButton
-                android:id="@+id/btn_refresh"
+                android:id="@+id/btn_open_playlist"
                 android:layout_width="50dp"
                 android:layout_height="50dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_rotate"
-                android:contentDescription="刷新歌单" />
+                android:contentDescription="打开播放列表"
+                android:src="@android:drawable/ic_menu_info_details" />
 
         </LinearLayout>
 
     </LinearLayout>
-
-    <!-- 播放列表入口按钮 -->
-    <Button
-        android:id="@+id/btn_open_playlist"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="8dp"
-        android:text="打开播放列表"
-        android:textSize="14sp" />
 
 </LinearLayout>

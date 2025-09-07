@@ -1,6 +1,4 @@
-package com.flying.whitefox.data.network;
-
-import android.util.Log;
+package com.flying.whitefox.utils.network;
 
 import com.flying.whitefox.BuildConfig;
 

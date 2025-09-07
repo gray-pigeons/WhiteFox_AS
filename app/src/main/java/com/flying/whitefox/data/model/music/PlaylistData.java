@@ -13,18 +13,18 @@ public class PlaylistData implements Serializable {
     public static class Song implements Serializable {
         private static final long serialVersionUID = 1L;
         
-        public int id;
+        public String id;
         public String name;
         public String ar_name;  // 艺术家名称
         public String al_name;  // 专辑名称
         public String pic;      // 专辑图片URL
 
         // Getters and setters
-        public int getId() {
+        public String getId() {
             return id;
         }
 
-        public void setId(int id) {
+        public void setId(String id) {
             this.id = id;
         }
 

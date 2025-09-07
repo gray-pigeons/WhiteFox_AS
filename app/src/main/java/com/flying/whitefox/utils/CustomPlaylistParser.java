@@ -66,7 +66,7 @@ public class CustomPlaylistParser {
                         PlaylistData.Song song = new PlaylistData.Song();
 
                         // 歌曲ID
-                        song.id = songObject.has("id") ? songObject.get("id").getAsInt() : 0;
+                        song.id = songObject.has("id") ? songObject.get("id").getAsString() : "0";
                         
                         // 歌曲名称
                         song.name = songObject.has("name") ? songObject.get("name").getAsString() : "未知歌曲";
