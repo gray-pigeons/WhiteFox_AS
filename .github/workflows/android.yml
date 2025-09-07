@@ -39,6 +39,7 @@ jobs:
       uses: actions/attest-build-provenance@v1      
       with:
         subject-name: "app-debug"
+        subject-path: "app/build/outputs/apk/debug/app-debug.apk"
       
     # 保存生成的 APK 文件
     - name: Upload Debug APK
