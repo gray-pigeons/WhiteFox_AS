@@ -30,12 +30,12 @@ jobs:
 
         
     # 添加构建证明步骤（在构建完成后，上传 APK 前）
+     # 添加构建证明步骤（按照官方文档的正确用法）
     - name: Attest build provenance
-      uses: actions/attest-build-provenance@v1      
+      uses: actions/attest-build-provenance@v3      
       with:
-        repository: ${{ github.repository }}
-        commit: ${{ github.sha }}
-        ref: ${{ github.ref }}
+        subject-name: "app-release"
+        subject-path: "app/build/outputs/apk/release/app-release.apk"
       
     # 保存生成的 APK 文件
     - name: Upload Release APK
