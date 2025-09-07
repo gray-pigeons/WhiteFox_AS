@@ -33,14 +33,11 @@ jobs:
       id: apk-sha      
       run: echo "sha256=$(sha256sum app/build/outputs/apk/release/app-release.apk | awk '{print $1}')" >> $GITHUB_OUTPUT
 
-    # 添加构建证明步骤（使用正确的参数）
+    # 添加构建证明步骤（按照官方文档的正确用法）
     - name: Attest build provenance
       uses: actions/attest-build-provenance@v1      
       with:
-        subject-name: "build"
-        subject-path: "app/build/outputs/apk/release/app-release.apk"
-        subject-digest: ${{ steps.apk-sha256.outputs.sha256 }}
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        subject-name: "app-debug"
       
     # 保存生成的 APK 文件
     - name: Upload Debug APK
