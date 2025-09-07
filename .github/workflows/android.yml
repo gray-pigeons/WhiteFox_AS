@@ -28,13 +28,19 @@ jobs:
       run: ./gradlew build
     # run: ./gradlew assembleRelease 
 
-     # 添加构建证明步骤（在构建完成后，上传 APK 前）
+    # 计算 APK 的 SHA256 哈希值
+    - name: Calculate APK SHA      
+      id: apk-sha      
+      run: echo "sha256=$(sha256sum app/build/outputs/apk/release/app-release.apk | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+    # 添加构建证明步骤（使用正确的参数）
     - name: Attest build provenance
       uses: actions/attest-build-provenance@v1      
       with:
-        repository: ${{ github.repository }}
-        commit: ${{ github.sha }}
-        ref: ${{ github.ref }}
+        subject-name: "build"
+        subject-path: "app/build/outputs/apk/release/app-release.apk"
+        subject-digest: ${{ steps.apk-sha256.outputs.sha256 }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
       
     # 保存生成的 APK 文件
     - name: Upload Debug APK
