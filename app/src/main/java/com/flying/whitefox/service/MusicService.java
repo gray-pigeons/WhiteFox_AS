@@ -1,0 +1,552 @@
+package com.flying.whitefox.service;
+
+
+import android.util.Log;
+
+import com.flying.whitefox.data.model.music.PlaylistData;
+import com.flying.whitefox.data.model.music.SongData;
+import com.flying.whitefox.utils.config.RequestURLConfig;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
+public class MusicService {
+    private static final String TAG = "MusicService";
+    private static final String PROXY_URL = RequestURLConfig.getVipNeteaseMusic;
+    private static final OkHttpClient client = new OkHttpClient();
+    private static final int MAX_RETRIES = 10; // 最大重试次数，减少重试次数
+    private static final long RETRY_DELAY = 10000; // 重试延迟（毫秒）10秒
+
+    // 用于存储当前正在进行的请求，以便可以取消
+    private static Call currentCall;
+
+    /**
+     * 获取歌单信息
+     *
+     @param playlistId 歌单ID
+     */
+    public static Future<PlaylistData> getPlaylist(int playlistId) {
+        // 取消之前的请求（如果有的话）
+        if (currentCall != null && !currentCall.isCanceled()) {
+            currentCall.cancel();
+            Log.d(TAG, "取消了之前的请求");
+        }
+
+        CompletableFuture<PlaylistData> future = new CompletableFuture<>();
+        getPlaylistWithRetry(playlistId, 0, future);
+        return future;
+    }
+
+    /**
+     * 带重试机制的获取歌单信息
+     *
+     @param playlistId 歌单ID
+     @param retryCount 当前重试次数
+     @param future     结果Future
+     */
+    private static void getPlaylistWithRetry(int playlistId, int retryCount, CompletableFuture<PlaylistData> future) {
+        // 使用正确的网易云音乐API URL
+        String url = "https://music.163.com/api/playlist/detail?id=" + playlistId;
+//        String url = "https://whitefox.3yu3.top/wymusiclist.json";
+        Log.i(TAG, "getPlaylist url: " + url + " (attempt " + (retryCount + 1) + ")");
+        
+        // 构建带有必要请求头的请求
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                .addHeader("Referer", "https://music.163.com")
+                .build();
+
+        currentCall = client.newCall(request);
+        currentCall.enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                if (call.isCanceled()) {
+                    Log.d(TAG, "请求被取消");
+                    future.complete(null);
+                    return;
+                }
+
+                Log.e(TAG, "获取歌单信息失败", e);
+                if (retryCount < MAX_RETRIES) {
+                    retryGetPlaylist(playlistId, retryCount, future);
+                } else {
+                    future.complete(null);
+                }
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (call.isCanceled()) {
+                    Log.d(TAG, "请求被取消");
+                    future.complete(null);
+                    return;
+                }
+
+                if (!response.isSuccessful()) {
+                    Log.e(TAG, "获取歌单信息失败: " + response.code());
+                    if (retryCount < MAX_RETRIES) {
+                        retryGetPlaylist(playlistId, retryCount, future);
+                    } else {
+                        future.complete(null);
+                    }
+                    return;
+                }
+
+                try {
+                    String responseData = response.body().string();
+                    JSONObject jsonObject = new JSONObject(responseData);
+
+                    // 检查返回的数据结构
+                    Log.d(TAG, "Response data: " + responseData.substring(0, Math.min(200, responseData.length())) + "...");
+
+                    // 检查是否服务器繁忙
+                    String msg = jsonObject.optString("msg", "");
+                    int code = jsonObject.optInt("code", 200);
+                    if (code == -447 || (msg.contains("服务器忙碌") || msg.contains("请稍后再试"))) {
+                        Log.w(TAG, "服务器忙碌，准备重试...");
+                        if (retryCount < MAX_RETRIES) {
+                            retryGetPlaylist(playlistId, retryCount, future);
+                        } else {
+                            future.complete(null);
+                        }
+                        return;
+                    }
+
+                    PlaylistData playlistData = new PlaylistData();
+                    playlistData.id = playlistId;
+
+                    // 解析歌单详情 - 修复嵌套结构访问
+                    JSONObject resultObj = jsonObject.optJSONObject("result");
+                    if (resultObj != null) {
+                        JSONObject playlistObj = resultObj.optJSONObject("playlist");
+                        if (playlistObj == null) {
+                            // 如果playlist不存在，直接使用result对象
+                            playlistObj = resultObj;
+                        }
+                        
+                        // 获取歌单ID和名称
+                        playlistData.id = playlistObj.optInt("id", playlistId);
+                        playlistData.name = playlistObj.optString("name", "未知歌单");
+
+                        // 解析歌曲列表
+                        JSONArray tracksArray = playlistObj.optJSONArray("tracks");
+                        if (tracksArray != null && tracksArray.length() > 0) {
+                            List<PlaylistData.Song> songs = new ArrayList<>();
+
+                            for (int i = 0; i < tracksArray.length(); i++) {
+                                JSONObject trackObj = tracksArray.getJSONObject(i);
+                                PlaylistData.Song song = new PlaylistData.Song();
+                                song.id = trackObj.optInt("id", 0);
+                                song.name = trackObj.optString("name", "未知歌曲");
+
+                                // 解析艺术家信息 - 支持多种格式
+                                String artistName = "未知歌手";
+                                JSONArray artistsArray = trackObj.optJSONArray("ar");
+                                if (artistsArray != null && artistsArray.length() > 0) {
+                                    JSONObject artistObj = artistsArray.getJSONObject(0);
+                                    artistName = artistObj.optString("name", "未知歌手");
+                                } else {
+                                    artistsArray = trackObj.optJSONArray("artists");
+                                    if (artistsArray != null && artistsArray.length() > 0) {
+                                        JSONObject artistObj = artistsArray.getJSONObject(0);
+                                        artistName = artistObj.optString("name", "未知歌手");
+                                    }
+                                }
+                                song.ar_name = artistName;
+
+                                // 解析专辑信息 - 支持多种格式
+                                String albumName = "未知专辑";
+                                String albumPic = "https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg";
+                                
+                                JSONObject albumObj = trackObj.optJSONObject("al");
+                                if (albumObj == null) {
+                                    albumObj = trackObj.optJSONObject("album");
+                                }
+                                
+                                if (albumObj != null) {
+                                    albumName = albumObj.optString("name", "未知专辑");
+                                    albumPic = albumObj.optString("picUrl", albumPic);
+                                }
+                                
+                                song.al_name = albumName;
+                                song.pic = albumPic;
+
+                                songs.add(song);
+                            }
+
+                            playlistData.songs = songs;
+                            Log.d(TAG, "成功解析歌单: " + playlistData.name + ", 包含 " + songs.size() + " 首歌曲");
+                            future.complete(playlistData);
+                        } else {
+                            Log.e(TAG, "解析歌单信息失败，tracks数组为空或不存在");
+                            if (retryCount < MAX_RETRIES) {
+                                retryGetPlaylist(playlistId, retryCount, future);
+                            } else {
+                                future.complete(null);
+                            }
+                        }
+                    } else {
+                        Log.e(TAG, "解析歌单信息失败，result对象为空");
+                        if (retryCount < MAX_RETRIES) {
+                            retryGetPlaylist(playlistId, retryCount, future);
+                        } else {
+                            future.complete(null);
+                        }
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "解析歌单信息失败", e);
+                    if (retryCount < MAX_RETRIES) {
+                        retryGetPlaylist(playlistId, retryCount, future);
+                    } else {
+                        future.complete(null);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * 重试获取歌单
+     *
+     @param playlistId 歌单ID
+     @param retryCount 当前重试次数
+     @param future     结果Future
+     */
+    private static void retryGetPlaylist(int playlistId, int retryCount, CompletableFuture<PlaylistData> future) {
+        Log.d(TAG, "将在 " + RETRY_DELAY + "ms 后进行第 " + (retryCount + 1) + " 次重试");
+        
+        // 使用Handler来处理延迟和重试，确保在主线程中调度
+        android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                // 检查future是否已经被取消
+                if (!future.isCancelled() && !future.isDone()) {
+                    getPlaylistWithRetry(playlistId, retryCount + 1, future);
+                }
+            }
+        }, RETRY_DELAY);
+    }
+
+    /**
+     * 取消当前正在进行的请求
+     */
+    public static void cancelCurrentRequest() {
+        if (currentCall != null && !currentCall.isCanceled()) {
+            currentCall.cancel();
+            Log.d(TAG, "已取消当前请求");
+        }
+    }
+
+    /**
+     * 从指定URL获取歌单信息
+     *
+     * @param playlistUrl 歌单URL
+     */
+    public static Future<PlaylistData> getPlaylistFromUrl(String playlistUrl) {
+        CompletableFuture<PlaylistData> future = new CompletableFuture<>();
+        Log.i(TAG, "getPlaylistFromUrl url: " + playlistUrl);
+        
+        Request request = new Request.Builder()
+                .url(playlistUrl)
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                .addHeader("Referer", "https://music.163.com")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "获取歌单信息失败", e);
+                future.complete(null);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    Log.e(TAG, "获取歌单信息失败: " + response.code());
+                    future.complete(null);
+                    return;
+                }
+
+                try {
+                    String responseData = response.body().string();
+                    Log.d(TAG, "获取到的原始数据: " + responseData.substring(0, Math.min(responseData.length(), 200)) + "...");
+                    
+                    // 尝试解析为PlaylistData
+                    PlaylistData playlistData = new PlaylistData();
+                    Gson gson = new Gson();
+                    JsonObject jsonObject = gson.fromJson(responseData, JsonObject.class);
+
+                    // 解析歌单详情
+                    JsonObject resultObj = null;
+                    if (jsonObject.has("result")) {
+                        resultObj = jsonObject.getAsJsonObject("result");
+                    } else if (jsonObject.has("playlist")) {
+                        resultObj = jsonObject.getAsJsonObject("playlist");
+                    } else {
+                        resultObj = jsonObject;
+                    }
+
+                    if (resultObj != null) {
+                        playlistData.id = resultObj.has("id") ? resultObj.get("id").getAsInt() : 0;
+                        playlistData.name = resultObj.has("name") ? resultObj.get("name").getAsString() : "网络歌单";
+                        Log.i(TAG, "onResponse id: "+playlistData.getId());
+                        Log.i(TAG, "onResponse name: "+playlistData.getName());
+                        // 解析歌曲
+                        if (resultObj.has("tracks") && resultObj.get("tracks").isJsonArray()) {
+                            JsonArray tracksArray = resultObj.getAsJsonArray("tracks");
+                            List<PlaylistData.Song> songs = new ArrayList<>();
+                            Log.i(TAG, "onResponse tracksArray: "+tracksArray.size());
+                            for (int i = 0; i < tracksArray.size(); i++) {
+                                JsonObject trackObj = tracksArray.get(i).getAsJsonObject();
+                                PlaylistData.Song song = new PlaylistData.Song();
+                                
+                                song.id = trackObj.has("id") ? trackObj.get("id").getAsInt() : 0;
+                                song.name = trackObj.has("name") ? trackObj.get("name").getAsString() : "未知歌曲";
+                                
+                                // 解析艺术家
+                                if (trackObj.has("ar") && trackObj.getAsJsonArray("ar").size() > 0) {
+                                    JsonObject artistObj = trackObj.getAsJsonArray("ar").get(0).getAsJsonObject();
+                                    song.ar_name = artistObj.has("name") ? artistObj.get("name").getAsString() : "未知歌手";
+                                } else if (trackObj.has("artists") && trackObj.getAsJsonArray("artists").size() > 0) {
+                                    JsonObject artistObj = trackObj.getAsJsonArray("artists").get(0).getAsJsonObject();
+                                    song.ar_name = artistObj.has("name") ? artistObj.get("name").getAsString() : "未知歌手";
+                                } else {
+                                    song.ar_name = "未知歌手";
+                                }
+                                
+                                // 解析专辑
+                                if (trackObj.has("al") && trackObj.getAsJsonObject("al").has("name")) {
+                                    JsonObject albumObj = trackObj.getAsJsonObject("al");
+                                    song.al_name = albumObj.has("name") ? albumObj.get("name").getAsString() : "未知专辑";
+                                    song.pic = albumObj.has("picUrl") ? albumObj.get("picUrl").getAsString() : 
+                                            "https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg";
+                                } else {
+                                    song.al_name = "未知专辑";
+                                    song.pic = "https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg";
+                                }
+                                
+                                songs.add(song);
+                            }
+                            
+                            playlistData.songs = songs;
+                        }
+                    }
+                    
+                    future.complete(playlistData);
+                } catch (Exception e) {
+                    Log.e(TAG, "解析歌单信息失败", e);
+                    future.complete(null);
+                }
+            }
+        });
+
+        return future;
+    }
+
+    /**
+     * 获取歌曲播放链接
+     *
+     @param songId 网易云歌曲 ID
+     @param level  比特率
+     */
+    public static Future<SongData> getSongUrl(int songId, String level) {
+        CompletableFuture<SongData> future = new CompletableFuture<>();
+        
+        // 尝试多个代理URL
+        String[] proxyUrls = {
+            PROXY_URL + "?ids=" + songId + "&level=" + level + "&type=json",
+            RequestURLConfig.getMusicAnalysisAggregation + "?id=" + songId + "&media=netease&type=url",
+        };
+        
+        tryNextProxyUrl(proxyUrls, 0, future, songId, level);
+        return future;
+    }
+    
+    private static void tryNextProxyUrl(String[] proxyUrls, int index, CompletableFuture<SongData> future, 
+                                       int songId, String level) {
+        if (index >= proxyUrls.length) {
+            Log.e(TAG, "所有代理URL都尝试失败");
+            future.complete(null);
+            return;
+        }
+        
+        String url = proxyUrls[index];
+        Log.i(TAG, "尝试获取歌曲链接 URL[" + index + "]: " + url);
+        
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                .addHeader("Referer", "https://music.163.com")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "获取歌曲链接失败 URL[" + index + "]: " + url, e);
+                // 尝试下一个URL
+                tryNextProxyUrl(proxyUrls, index + 1, future, songId, level);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    Log.e(TAG, "获取歌曲链接失败 URL[" + index + "]: " + url + ", code: " + response.code());
+                    // 尝试下一个URL
+                    tryNextProxyUrl(proxyUrls, index + 1, future, songId, level);
+                    return;
+                }
+
+                try {
+                    String responseData = response.body().string();
+                    Log.d(TAG, "Song URL response data[" + index + "]: " + responseData);
+
+                    // 检查响应是否有效
+                    if (responseData.contains("\"status\": 400") || responseData.contains("信息获取不完整")) {
+                        Log.e(TAG, "获取歌曲链接失败，信息不完整 URL[" + index + "]");
+                        // 尝试下一个URL
+                        tryNextProxyUrl(proxyUrls, index + 1, future, songId, level);
+                        return;
+                    }
+
+                    JSONObject jsonObject = new JSONObject(responseData);
+                    SongData songData = new SongData();
+                    
+                    // 根据不同的响应格式解析数据
+                    if (jsonObject.has("data") && jsonObject.get("data") instanceof JSONArray) {
+                        // 处理api.bzqll.com格式的响应
+                        JSONArray dataArray = jsonObject.getJSONArray("data");
+                        if (dataArray.length() > 0) {
+                            JSONObject dataObj = dataArray.getJSONObject(0);
+                            songData.status = 200;
+                            songData.name = dataObj.optString("songname", "");
+                            songData.ar_name = dataObj.optString("artistname", "");
+                            songData.al_name = dataObj.optString("albumname", "");
+                            songData.pic = dataObj.optString("pic", "");
+                            songData.url = dataObj.optString("url", "");
+                        }
+                    } else {
+                        // 处理标准格式响应
+                        songData.status = jsonObject.optInt("status", 0);
+                        songData.msg = jsonObject.optString("msg", "");
+                        songData.al_name = jsonObject.optString("al_name", "");
+                        songData.ar_name = jsonObject.optString("ar_name", "");
+                        songData.level = jsonObject.optString("level", "");
+                        songData.lyric = jsonObject.optString("lyric", "");
+                        songData.name = jsonObject.optString("name", "");
+                        songData.pic = jsonObject.optString("pic", "");
+                        songData.size = jsonObject.optString("size", "");
+                        songData.tlyric = jsonObject.optString("tlyric", "");
+                        songData.url = jsonObject.optString("url", "");
+                    }
+
+                    if (songData.status == 200 || (songData.url != null && !songData.url.isEmpty())) {
+                        future.complete(songData);
+                    } else {
+                        Log.e(TAG, "解析歌曲信息失败 URL[" + index + "]");
+                        // 尝试下一个URL
+                        tryNextProxyUrl(proxyUrls, index + 1, future, songId, level);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "解析歌曲信息失败 URL[" + index + "]", e);
+                    // 尝试下一个URL
+                    tryNextProxyUrl(proxyUrls, index + 1, future, songId, level);
+                }
+            }
+        });
+    }
+
+    /**
+     * 搜索歌曲
+     *
+     @param keyword 搜索关键词
+     */
+    public static Future<List<PlaylistData.Song>> searchSong(String keyword) {
+        CompletableFuture<List<PlaylistData.Song>> future = new CompletableFuture<>();
+
+        String url = "https://api.bzqll.com/music/tencent/search?key=" + keyword + "&limit=20&type=song";
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "搜索歌曲失败", e);
+                future.complete(null);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    Log.e(TAG, "搜索歌曲失败: " + response.code());
+                    future.complete(null);
+                    return;
+                }
+
+                try {
+                    String responseData = response.body().string();
+                    JSONObject jsonObject = new JSONObject(responseData);
+                    // 检查返回的数据结构
+                    Log.d(TAG, "Search response data: " + responseData);
+
+                    JSONArray songsArray = jsonObject.optJSONArray("data");
+                    List<PlaylistData.Song> songs = new ArrayList<>();
+
+                    if (songsArray != null) {
+                        for (int i = 0; i < songsArray.length(); i++) {
+                            JSONObject songObj = songsArray.getJSONObject(i);
+                            PlaylistData.Song song = new PlaylistData.Song();
+                            song.id = songObj.optInt("songid", 0);
+                            song.name = songObj.optString("songname", "未知歌曲");
+                            song.ar_name = songObj.optString("artistname", "未知歌手");
+                            song.al_name = songObj.optString("albumname", "未知专辑");
+                            song.pic = songObj.optString("pic", "https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg");
+                            songs.add(song);
+                        }
+                    }
+
+                    future.complete(songs);
+                } catch (JSONException e) {
+                    Log.e(TAG, "解析搜索结果失败", e);
+                    future.complete(null);
+                }
+            }
+        });
+
+        return future;
+    }
+
+
+    /**
+     * 将HTTP URL转换为HTTPS URL
+     *
+     * @param url 原始URL
+     * @return 安全的HTTPS URL
+     */
+    private static String toHttpsUrl(String url) {
+        if (url != null && url.startsWith("http://")) {
+            return url.replaceFirst("http://", "https://");
+        }
+        return url;
+    }
+}
+
