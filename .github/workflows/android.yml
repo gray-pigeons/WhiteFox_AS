@@ -9,6 +9,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 启用 OIDC 令牌（关键修改）
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
 
     steps:
     - uses: actions/checkout@v4
@@ -28,10 +33,6 @@ jobs:
       run: ./gradlew build
     # run: ./gradlew assembleRelease 
 
-    # 计算 APK 的 SHA256 哈希值
-    - name: Calculate APK SHA      
-      id: apk-sha      
-      run: echo "sha256=$(sha256sum app/build/outputs/apk/release/app-release.apk | awk '{print $1}')" >> $GITHUB_OUTPUT
 
     # 添加构建证明步骤（按照官方文档的正确用法）
     - name: Attest build provenance
