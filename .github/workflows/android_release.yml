@@ -1,0 +1,36 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+      
+
+      # build 任务会运行 lint 检查，assembleRelease 任务会生成发布版 APK，但不会运行 lint 检查
+    - name: Build with Gradle
+      run: ./gradlew assembleRelease 
+    # run: ./gradlew build
+      
+    # 保存生成的 APK 文件
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: whitefoxapp-release
+        path: app/build/outputs/apk/release/whitefoxapp-release.apk
