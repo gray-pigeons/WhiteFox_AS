@@ -8,7 +8,6 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -22,5 +21,16 @@ jobs:
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
+      
+
+      # build 任务会运行 lint 检查，assembleRelease 任务会生成发布版 APK，但不会运行 lint 检查
     - name: Build with Gradle
       run: ./gradlew build
+    # run: ./gradlew assembleRelease 
+      
+    # 保存生成的 APK 文件
+    - name: Upload Debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release
+        path: app/build/outputs/apk/debug/whitefoxapp-debug.apk
