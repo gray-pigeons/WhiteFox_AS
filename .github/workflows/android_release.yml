@@ -32,5 +32,5 @@ jobs:
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: whitefoxapp-release
-        path: app/build/outputs/apk/release/whitefoxapp-release.apk
+        name: app-release
+        path: app/build/outputs/apk/release/app-release.apk
