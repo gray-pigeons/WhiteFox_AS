@@ -16,9 +16,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // 添加JitPack仓库以支持XXPermissions
+        maven { url = java.net.URI("https://jitpack.io") }
     }
 }
 
 rootProject.name = "WhiteFox"
 include(":app")
- 

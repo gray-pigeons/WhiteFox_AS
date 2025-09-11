@@ -49,7 +49,9 @@ dependencies {
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
     //权限
-    implementation(libs.permissionx)
+    implementation(libs.xxpermissions)
+    //设备权限兼容框架
+    implementation(libs.devicecompat)
     // 添加网络库依赖
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)

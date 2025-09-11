@@ -7,9 +7,11 @@ import android.os.Build;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.fragment.app.FragmentActivity;
 
-import com.permissionx.guolindev.PermissionX;
+import com.hjq.permissions.OnPermissionCallback;
+import com.hjq.permissions.XXPermissions;
+import com.hjq.permissions.permission.PermissionLists;
+import com.hjq.permissions.permission.base.IPermission;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,64 +59,71 @@ public class PermissionManager {
     @SuppressLint("ObsoleteSdkInt")
     public static void requestAllPermissions(Activity activity, PermissionCallback callback) {
         // 构建权限列表
-        List<String> permissions = getList();
+        List<IPermission> permissions = getList();
 
-        PermissionX.init((FragmentActivity) activity)
+        XXPermissions.with(activity)
                 .permissions(permissions)
-                .explainReasonBeforeRequest()
-                .onExplainRequestReason((scope, deniedList) -> {
-                    StringBuilder message = new StringBuilder("应用需要以下权限才能正常运行:\n");
-                    for (String permission : deniedList) {
-                        message.append(getPermissionDescription(permission)).append("\n");
-                    }
-                    scope.showRequestReasonDialog(deniedList, message.toString(), "允许", "拒绝");
-                })
-                .onForwardToSettings((scope, deniedList) -> {
-                    StringBuilder message = new StringBuilder("以下权限被拒绝，需要在设置中手动开启:\n");
-                    for (String permission : deniedList) {
-                        message.append(getPermissionDescription(permission)).append("\n");
-                    }
-                    scope.showForwardToSettingsDialog(deniedList, message.toString(), "去设置", "取消");
-                })
-                .request((allGranted, grantedList, deniedList) -> {
-                    if (allGranted) {
+                .request(new OnPermissionCallback() {
+                    @Override
+                    public void onResult(@NonNull List<IPermission> grantedList, @NonNull List<IPermission> deniedList) {
+                        boolean allGranted = deniedList.isEmpty();
+                        if (allGranted) {
+                            // 所有权限都已授予
 //                            Toast.makeText(activity, "所有权限已授予，应用可以正常使用", Toast.LENGTH_SHORT).show();
-                        if (callback != null) {
-                            callback.onAllPermissionsGranted();
-                        }
-                    } else {
-                        StringBuilder deniedPermissions = new StringBuilder();
-                        for (String permission : deniedList) {
-                            deniedPermissions.append(getPermissionDescription(permission)).append("\n");
-                        }
-                        Toast.makeText(activity, "以下权限被拒绝，可能会影响应用功能:\n" + deniedPermissions,
-                            Toast.LENGTH_LONG).show();
-                        if (callback != null) {
-                            callback.onPermissionsDenied(deniedList);
+                            if (callback != null) {
+                                callback.onAllPermissionsGranted();
+                            }
+                        } else {
+                            // 一些权限被拒绝
+                            List<String> deniedPermissionNames = new ArrayList<>();
+                            StringBuilder deniedPermissions = new StringBuilder();
+                            for (IPermission permission : deniedList) {
+                                String permissionName = permission.getPermissionName();
+                                deniedPermissionNames.add(permissionName);
+                                deniedPermissions.append(getPermissionDescription(permissionName)).append("\n");
+                            }
+                            
+                            // 判断请求失败的权限是否被用户勾选了不再询问的选项
+                            boolean doNotAskAgain = XXPermissions.isDoNotAskAgainPermissions(activity, deniedList);
+                            
+                            if (doNotAskAgain) {
+                                Toast.makeText(activity, "以下权限被永久拒绝，请手动在设置中开启:\n" + deniedPermissions,
+                                    Toast.LENGTH_LONG).show();
+                                // 跳转到设置页面
+                                XXPermissions.startPermissionActivity(activity, deniedList);
+                            } else {
+                                Toast.makeText(activity, "以下权限被拒绝，可能会影响应用功能:\n" + deniedPermissions,
+                                    Toast.LENGTH_LONG).show();
+                            }
+                            
+                            if (callback != null) {
+                                callback.onPermissionsDenied(deniedPermissionNames);
+                            }
                         }
                     }
                 });
     }
 
     @NonNull
-    private static List<String> getList() {
-        List<String> permissions = new ArrayList<>();
-
+    private static List<IPermission> getList() {
+        List<IPermission> permissions = new ArrayList<>();
         // 根据Android版本添加相应的权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // Android 13+ 需要单独的媒体权限
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS);
-            permissions.add(Manifest.permission.READ_MEDIA_IMAGES);
-            permissions.add(Manifest.permission.READ_MEDIA_VIDEO);
-            permissions.add(Manifest.permission.READ_MEDIA_AUDIO);
+            permissions.add(PermissionLists.getPostNotificationsPermission());
+            permissions.add(PermissionLists.getReadMediaImagesPermission());
+            permissions.add(PermissionLists.getReadMediaVideoPermission());
+            permissions.add(PermissionLists.getReadMediaAudioPermission());
+
         } else {
             // Android 12及以下版本使用传统的存储权限
-            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
-            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            permissions.add(PermissionLists.getReadExternalStoragePermission());
+            permissions.add(PermissionLists.getWriteExternalStoragePermission());
+
         }
 
         // 添加其他通用权限
-        permissions.add(Manifest.permission.CAMERA);
+        permissions.add(PermissionLists.getCameraPermission());
         return permissions;
     }
 
@@ -124,32 +133,36 @@ public class PermissionManager {
      * @param permissions 需要申请的权限列表
      * @param callback 权限申请结果回调
      */
-    public static void requestPermissions(Activity activity, List<String> permissions, PermissionCallback callback) {
-        PermissionX.init((FragmentActivity) activity)
+    public static void requestPermissions(Activity activity, List<IPermission> permissions, PermissionCallback callback) {
+        XXPermissions.with(activity)
                 .permissions(permissions)
-                .explainReasonBeforeRequest()
-                .onExplainRequestReason((scope, deniedList) -> {
-                    StringBuilder message = new StringBuilder("应用需要以下权限才能正常运行:\n");
-                    for (String permission : deniedList) {
-                        message.append(getPermissionDescription(permission)).append("\n");
-                    }
-                    scope.showRequestReasonDialog(deniedList, message.toString(), "允许", "拒绝");
-                })
-                .onForwardToSettings((scope, deniedList) -> {
-                    StringBuilder message = new StringBuilder("以下权限被拒绝，需要在设置中手动开启:\n");
-                    for (String permission : deniedList) {
-                        message.append(getPermissionDescription(permission)).append("\n");
-                    }
-                    scope.showForwardToSettingsDialog(deniedList, message.toString(), "去设置", "取消");
-                })
-                .request((allGranted, grantedList, deniedList) -> {
-                    if (allGranted) {
-                        if (callback != null) {
-                            callback.onAllPermissionsGranted();
-                        }
-                    } else {
-                        if (callback != null) {
-                            callback.onPermissionsDenied(deniedList);
+                .request(new OnPermissionCallback() {
+                    @Override
+                    public void onResult(@NonNull List<IPermission> grantedList, @NonNull List<IPermission> deniedList) {
+                        boolean allGranted = deniedList.isEmpty();
+                        if (allGranted) {
+                            if (callback != null) {
+                                callback.onAllPermissionsGranted();
+                            }
+                        } else {
+                            List<String> deniedPermissionNames = new ArrayList<>();
+                            for (IPermission permission : deniedList) {
+                                deniedPermissionNames.add(permission.getPermissionName());
+                            }
+                            
+                            // 判断请求失败的权限是否被用户勾选了不再询问的选项
+                            boolean doNotAskAgain = XXPermissions.isDoNotAskAgainPermissions(activity, deniedList);
+                            
+                            if (doNotAskAgain) {
+                                Toast.makeText(activity, "权限被永久拒绝，请手动在设置中开启",
+                                    Toast.LENGTH_LONG).show();
+                                // 跳转到设置页面
+                                XXPermissions.startPermissionActivity(activity, deniedList);
+                            }
+                            
+                            if (callback != null) {
+                                callback.onPermissionsDenied(deniedPermissionNames);
+                            }
                         }
                     }
                 });

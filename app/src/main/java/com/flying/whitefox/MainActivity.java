@@ -4,6 +4,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowManager;
 
+import com.flying.whitefox.service.MusicService;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -43,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 请求所有必要权限
         requestAllPermissions();
+
     }
     
     private void requestAllPermissions() {

@@ -37,7 +37,7 @@ public class MusicPlaybackService extends Service {
     private static final String CHANNEL_ID = "music_playback_channel";
     private static final String CHANNEL_NAME = "音乐播放";
     private static final String CHANNEL_DESCRIPTION = "音乐播放控制通知";
-    
+
     // 通知动作
     private static final String ACTION_PAUSE = "com.flying.whitefox.action.PAUSE";
     private static final String ACTION_PLAY = "com.flying.whitefox.action.PLAY";
@@ -52,7 +52,10 @@ public class MusicPlaybackService extends Service {
     private OnPlaybackListener playbackListener;
     private PlayMode playMode = PlayMode.SEQUENTIAL; // 默认顺序播放
     private final Random random = new Random();
-    
+
+    // 添加MusicService实例
+    private MusicService musicService;
+
     // 通知相关
     private NotificationManager notificationManager;
     private Bitmap defaultAlbumArt;
@@ -79,15 +82,18 @@ public class MusicPlaybackService extends Service {
     public void onCreate() {
         super.onCreate();
         mediaPlayer = new MediaPlayer();
+        // 初始化MusicService
+        musicService = new MusicService();
+        musicService.initializeCacheManager(this);
         setupMediaPlayer();
-        
+
         // 初始化通知管理器
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         createNotificationChannel();
-        
+
         // 创建默认专辑图片
         defaultAlbumArt = BitmapFactory.decodeResource(getResources(), android.R.drawable.ic_media_play);
-        
+
         // 注册广播接收器处理通知动作 (修复Android版本兼容性问题)
         IntentFilter filter = new IntentFilter();
         filter.addAction(ACTION_PAUSE);
@@ -95,7 +101,7 @@ public class MusicPlaybackService extends Service {
         filter.addAction(ACTION_NEXT);
         filter.addAction(ACTION_PREVIOUS);
         filter.addAction(ACTION_STOP);
-        
+
         // 根据Android版本选择合适的注册方式
         // Android 8.0及以上版本支持 RECEIVER_NOT_EXPORTED 标志
         registerReceiver(notificationReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
@@ -147,7 +153,7 @@ public class MusicPlaybackService extends Service {
     public IBinder onBind(Intent intent) {
         return binder;
     }
-    
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         // 确保服务在内存不足时不会被轻易杀死
@@ -176,7 +182,7 @@ public class MusicPlaybackService extends Service {
             notificationSong.setAr_name(song.getAr_name());
             notificationSong.setPic(song.getPic());
             currentSong = notificationSong;
-            
+
             isPrepared = false;
 
             String secureUrl = song.getSecureUrl();
@@ -426,6 +432,11 @@ public class MusicPlaybackService extends Service {
         }
     };
 
+    // 提供获取MusicService实例的方法
+    public MusicService getMusicService() {
+        return musicService;
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
@@ -436,14 +447,14 @@ public class MusicPlaybackService extends Service {
             mediaPlayer.release();
             mediaPlayer = null;
         }
-        
+
         // 取消注册广播接收器
         try {
             unregisterReceiver(notificationReceiver);
         } catch (IllegalArgumentException e) {
             // 接收器未注册，忽略异常
         }
-        
+
         hideNotification();
     }
 }
