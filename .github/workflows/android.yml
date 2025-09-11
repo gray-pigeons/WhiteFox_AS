@@ -9,6 +9,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 启用 OIDC 令牌（关键修改）
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
 
     steps:
     - uses: actions/checkout@v4
@@ -27,10 +32,18 @@ jobs:
     - name: Build with Gradle
       run: ./gradlew build
     # run: ./gradlew assembleRelease 
+
+
+    # 添加构建证明步骤（按照官方文档的正确用法）
+    - name: Attest build provenance
+      uses: actions/attest-build-provenance@v1      
+      with:
+        subject-name: "app-debug"
+        subject-path: "app/build/outputs/apk/debug/app-debug.apk"
       
     # 保存生成的 APK 文件
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
-        name: whitefoxappapp-debug
-        path: app/build/outputs/apk/debug/whitefoxapp-debug.apk
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
