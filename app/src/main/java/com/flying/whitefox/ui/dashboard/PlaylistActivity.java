@@ -75,10 +75,7 @@ public class PlaylistActivity extends AppCompatActivity {
         // 返回结果给DashboardFragment
         setResult(RESULT_OK, getIntent()
                 .putExtra("song_index", index));
-        runOnUiThread(() -> {
-            Toast.makeText(PlaylistActivity.this, "开始播放: " + song.name, Toast.LENGTH_SHORT).show();
-            finish();
-        });
+        finish();
     }
 }
 

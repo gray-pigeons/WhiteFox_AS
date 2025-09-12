@@ -1,5 +1,6 @@
 package com.flying.whitefox.ui.dashboard;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
@@ -65,7 +66,6 @@ public class DashboardFragment extends Fragment {
     // 数据
     private PlaylistData playlist;
     private int currentSongIndex = 0;
-    private boolean isPlaying = false;
     private boolean isFragmentFirstLoaded = true; // 标记Fragment是否首次加载
 
     // 进度更新
@@ -264,6 +264,7 @@ public class DashboardFragment extends Fragment {
         });
     }
 
+    @SuppressLint("SetTextI18n")
     private void updateUIWithPlaybackState(MusicPlaybackManager.PlaybackState state) {
         if (btnPlayPause != null) {
             if (state.isPlaying) {
@@ -273,10 +274,23 @@ public class DashboardFragment extends Fragment {
             }
         }
 
-        progressBar.setMax(state.duration);
-        progressBar.setProgress(state.currentPosition);
-        updateCurrentTimeText(state.currentPosition);
-        updateTotalTimeText(state.duration);
+        // 只有在进度有效时才更新进度条
+        if (state.duration > 0) {
+            progressBar.setMax(state.duration);
+            progressBar.setProgress(state.currentPosition);
+            updateCurrentTimeText(state.currentPosition);
+            updateTotalTimeText(state.duration);
+        } else {
+            // 如果没有有效的持续时间，重置进度条
+            progressBar.setProgress(0);
+            currentTime.setText("00:00");
+        }
+
+        // 如果正在播放，启动进度更新
+        if (state.isPlaying) {
+            progressHandler.removeCallbacks(progressRunnable);
+            progressHandler.postDelayed(progressRunnable, 1000);
+        }
     }
 
     private void setupActivityResultLaunchers() {
@@ -306,7 +320,6 @@ public class DashboardFragment extends Fragment {
                         if (musicPlaybackManager != null) {
                             // 使用MusicPlaybackManager播放歌曲
                             musicPlaybackManager.playSong(songIndex);
-                            isPlaying = true;
                             if (btnPlayPause != null) {
                                 btnPlayPause.setImageResource(android.R.drawable.ic_media_pause);
                             }
@@ -315,6 +328,10 @@ public class DashboardFragment extends Fragment {
                             if (playlist != null && playlist.songs != null &&
                                     songIndex >= 0 && songIndex < playlist.songs.size()) {
                                 updateSongInfo(playlist.songs.get(songIndex));
+                            }
+
+                            if (musicPlaybackManager != null) {
+                                musicPlaybackManager.updatePlaybackState();
                             }
                         }
                     }
