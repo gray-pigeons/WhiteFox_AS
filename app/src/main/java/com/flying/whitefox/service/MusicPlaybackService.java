@@ -66,7 +66,9 @@ public class MusicPlaybackService extends Service {
 
     public interface OnPlaybackListener {
         void onCompletion();
+
         void onError(String error);
+
         void onPlayModeChanged(PlayMode playMode);
     }
 
@@ -112,11 +114,20 @@ public class MusicPlaybackService extends Service {
             isPrepared = true;
             mediaPlayer.start();
             Log.d(TAG, "音乐开始播放");
-            // 显示通知
-            showNotification();
+            // 使用Handler确保在下一帧更新UI
+            new android.os.Handler().post(() -> {
+                // 显示通知
+                showNotification();
+                // 立即通知播放状态改变
+                if (playbackListener != null) {
+                    playbackListener.onPlayModeChanged(playMode);
+                }
+            });
         });
 
-        mediaPlayer.setOnCompletionListener(mp -> {
+        mediaPlayer.setOnCompletionListener(mp ->
+
+        {
             Log.d(TAG, "音乐播放完成");
             if (playMode == PlayMode.SINGLE_LOOP) {
                 // 单曲循环模式，重新播放当前歌曲
@@ -134,7 +145,9 @@ public class MusicPlaybackService extends Service {
             }
         });
 
-        mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+        mediaPlayer.setOnErrorListener((mp, what, extra) ->
+
+        {
             String error = "音乐播放错误: what=" + what + ", extra=" + extra;
             Log.e(TAG, error);
             if (playbackListener != null) {
@@ -401,7 +414,7 @@ public class MusicPlaybackService extends Service {
     }
 
     // 广播接收器处理通知动作
-    private BroadcastReceiver notificationReceiver = new BroadcastReceiver() {
+    private final BroadcastReceiver notificationReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();

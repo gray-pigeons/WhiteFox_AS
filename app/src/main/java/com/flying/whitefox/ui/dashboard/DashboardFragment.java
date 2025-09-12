@@ -18,6 +18,7 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
@@ -36,13 +37,13 @@ public class DashboardFragment extends Fragment {
     private DashboardViewModel dashboardViewModel;
     private static final String TAG = "DashboardFragment";
     private static final int PlaylistId = 3778678; // 热歌榜ID
-    
+
     // 添加静态变量来保存当前播放的歌曲索引
     private static int currentPlayingSongIndex = -1;
 
     // 音乐播放管理器
     private MusicPlaybackManager musicPlaybackManager;
-    
+
     // 跟踪当前播放模式
     private PlayMode currentPlayMode = PlayMode.SEQUENTIAL;
 
@@ -75,13 +76,21 @@ public class DashboardFragment extends Fragment {
             if (musicPlaybackManager != null) {
                 musicPlaybackManager.updatePlaybackState();
             }
-            progressHandler.postDelayed(this, 1000); // 每秒更新一次
+            // 只有在音乐播放时才继续更新进度
+            if (musicPlaybackManager != null && musicPlaybackManager.isPlaying()) {
+                progressHandler.postDelayed(this, 1000); // 每秒更新一次
+            }
         }
     };
 
     // Activity Result Launchers
     private ActivityResultLauncher<Intent> importPlaylistLauncher;
     private ActivityResultLauncher<Intent> playlistLauncher;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+    }
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -115,8 +124,8 @@ public class DashboardFragment extends Fragment {
                     getActivity().runOnUiThread(() -> {
                         currentSongIndex = songIndex;
                         currentPlayingSongIndex = songIndex;
-                        if (playlist != null && playlist.songs != null && 
-                            songIndex >= 0 && songIndex < playlist.songs.size()) {
+                        if (playlist != null && playlist.songs != null &&
+                                songIndex >= 0 && songIndex < playlist.songs.size()) {
                             updateSongInfo(playlist.songs.get(songIndex));
                         }
                     });
@@ -126,8 +135,8 @@ public class DashboardFragment extends Fragment {
             @Override
             public void onError(String error) {
                 if (isAdded() && getActivity() != null && !getActivity().isFinishing()) {
-                    getActivity().runOnUiThread(() -> 
-                        Toast.makeText(getContext(), error, Toast.LENGTH_LONG).show());
+                    getActivity().runOnUiThread(() ->
+                            Toast.makeText(getContext(), error, Toast.LENGTH_LONG).show());
                 }
             }
         });
@@ -136,9 +145,10 @@ public class DashboardFragment extends Fragment {
         if (playlist == null || playlist.songs == null || playlist.songs.isEmpty()) {
             musicPlaybackManager.loadPlaylist(PlaylistId, false); // 首次加载不强制刷新
         }
-
+        initSongInfoToUI();
         return root;
     }
+
 
     private void initViews(View root) {
         albumCover = root.findViewById(R.id.album_cover);
@@ -154,6 +164,36 @@ public class DashboardFragment extends Fragment {
         btnRefresh = root.findViewById(R.id.btn_refresh); // 刷新按钮
         btnImportPlaylist = root.findViewById(R.id.btn_import_playlist); // 导入歌单按钮
         btnOpenPlaylist = root.findViewById(R.id.btn_open_playlist); // 播放列表入口按钮
+    }
+
+    private void initSongInfoToUI() {
+        // 当Fragment重新创建时，获取当前播放状态
+        if (musicPlaybackManager != null) {
+            // 延迟一小段时间以确保服务连接完成
+            new Handler().postDelayed(() -> {
+                // 获取当前播放列表
+                PlaylistData currentPlaylist = musicPlaybackManager.getCurrentPlaylist();
+                if (currentPlaylist != null) {
+                    handlePlaylistLoaded(currentPlaylist);
+
+                    // 获取当前播放的歌曲索引
+                    int currentSongIndex = musicPlaybackManager.getCurrentSongIndex();
+                    if (currentSongIndex >= 0 && currentPlaylist.songs != null &&
+                            currentSongIndex < currentPlaylist.songs.size()) {
+                        updateSongInfo(currentPlaylist.songs.get(currentSongIndex));
+                    }
+                } else {
+                    // 如果没有播放列表，加载默认播放列表
+                    // 排除正在播放的情况下，被刷新了时，重新加载
+                    if (playlist == null || playlist.songs == null || playlist.songs.isEmpty()) {
+                        musicPlaybackManager.loadPlaylist(PlaylistId, false); // 首次加载不强制刷新
+                    }
+                }
+
+                // 更新播放状态（播放/暂停按钮等）
+                musicPlaybackManager.updatePlaybackState();
+            }, 500);
+        }
     }
 
     private void setupListeners() {
@@ -176,7 +216,7 @@ public class DashboardFragment extends Fragment {
             if (musicPlaybackManager != null) {
                 // 切换播放模式
                 PlayMode nextMode;
-                
+
                 switch (currentPlayMode) {
                     case SEQUENTIAL:
                         nextMode = PlayMode.RANDOM;
@@ -190,7 +230,7 @@ public class DashboardFragment extends Fragment {
                     default:
                         nextMode = PlayMode.SEQUENTIAL;
                 }
-                
+
                 currentPlayMode = nextMode;
                 musicPlaybackManager.setPlayMode(nextMode);
                 updatePlayModeButton(nextMode);
@@ -232,7 +272,7 @@ public class DashboardFragment extends Fragment {
                 btnPlayPause.setImageResource(android.R.drawable.ic_media_play);
             }
         }
-        
+
         progressBar.setMax(state.duration);
         progressBar.setProgress(state.currentPosition);
         updateCurrentTimeText(state.currentPosition);
@@ -246,6 +286,7 @@ public class DashboardFragment extends Fragment {
                 result -> {
                     // 处理导入歌单Activity的结果
                     // 这里可以根据需要处理返回的结果
+                    Toast.makeText(getContext(), "暂未实现", Toast.LENGTH_SHORT).show();
                 }
         );
 
@@ -255,26 +296,24 @@ public class DashboardFragment extends Fragment {
                 result -> {
                     // 处理播放列表Activity的结果
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                        // 获取返回的歌曲数据
-                        SongData songData = (SongData) result.getData().getSerializableExtra("song_data");
                         int songIndex = result.getData().getIntExtra("song_index", 0);
-                        
+
                         // 更新当前歌曲索引
                         currentSongIndex = songIndex;
                         currentPlayingSongIndex = songIndex;
-                        
+
                         // 播放选中的歌曲
-                        if (songData != null && musicPlaybackManager != null) {
+                        if (musicPlaybackManager != null) {
                             // 使用MusicPlaybackManager播放歌曲
                             musicPlaybackManager.playSong(songIndex);
                             isPlaying = true;
                             if (btnPlayPause != null) {
                                 btnPlayPause.setImageResource(android.R.drawable.ic_media_pause);
                             }
-                            
+
                             // 更新UI
-                            if (playlist != null && playlist.songs != null && 
-                                songIndex >= 0 && songIndex < playlist.songs.size()) {
+                            if (playlist != null && playlist.songs != null &&
+                                    songIndex >= 0 && songIndex < playlist.songs.size()) {
                                 updateSongInfo(playlist.songs.get(songIndex));
                             }
                         }
@@ -291,7 +330,7 @@ public class DashboardFragment extends Fragment {
             Toast.makeText(getContext(), "暂无播放列表", Toast.LENGTH_SHORT).show();
             return;
         }
-        
+
         // 打开PlaylistActivity
         Intent intent = new Intent(getActivity(), PlaylistActivity.class);
         intent.putExtra(PlaylistActivity.EXTRA_PLAYLIST, playlist);
@@ -305,7 +344,7 @@ public class DashboardFragment extends Fragment {
      */
     private void updatePlayModeButton(PlayMode mode) {
         if (btnPlayMode == null) return;
-        
+
         switch (mode) {
             case SEQUENTIAL:
                 btnPlayMode.setImageResource(android.R.drawable.ic_menu_sort_by_size);
@@ -331,11 +370,6 @@ public class DashboardFragment extends Fragment {
      * 刷新歌单（取消当前请求并立即开始新的请求）
      */
     private void refreshPlaylist() {
-        Toast.makeText(getContext(), "正在刷新歌单...", Toast.LENGTH_SHORT).show();
-        // 取消当前正在进行的任何请求
-        // 注意：这个方法需要在MusicService中保持为静态方法，因为它在请求被实例化之前就需要被调用
-        com.flying.whitefox.service.MusicService.cancelCurrentRequest();
-        
         // 等待一小段时间确保请求被取消
         new android.os.Handler().postDelayed(() -> {
             Toast.makeText(getContext(), "开始获取最新歌单...", Toast.LENGTH_SHORT).show();
@@ -356,11 +390,13 @@ public class DashboardFragment extends Fragment {
 
             // 只有在没有音乐播放时才设置初始歌曲
             if (!isMusicPlaying) {
-                Random random = new Random();
-                int randomIndex = random.nextInt(playlistData.songs.size());
+                if (currentSongIndex < 0 || currentSongIndex >= playlistData.songs.size()) {
+                    Random random = new Random();
+                    currentSongIndex = random.nextInt(playlistData.songs.size());
+                }
+
                 // 不立即播放，只是设置当前歌曲索引
-                currentSongIndex = randomIndex;
-                currentPlayingSongIndex = randomIndex; // 更新静态变量
+                currentPlayingSongIndex = currentSongIndex; // 更新静态变量
                 // 更新UI显示当前歌曲信息
                 updateSongInfo(playlistData.songs.get(currentSongIndex));
             }
@@ -394,7 +430,7 @@ public class DashboardFragment extends Fragment {
     public void onDestroy() {
         super.onDestroy();
         progressHandler.removeCallbacks(progressRunnable);
-        
+
         if (musicPlaybackManager != null) {
             musicPlaybackManager.destroy();
         }

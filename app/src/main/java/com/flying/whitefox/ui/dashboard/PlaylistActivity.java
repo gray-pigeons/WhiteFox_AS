@@ -27,9 +27,7 @@ public class PlaylistActivity extends AppCompatActivity {
 
     private RecyclerView recyclerView;
     private ImageButton btnClose;
-    private PlaylistAdapter adapter;
     private PlaylistData playlist;
-    private int currentSongIndex = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,10 +48,10 @@ public class PlaylistActivity extends AppCompatActivity {
 
     private void initData() {
         playlist = (PlaylistData) getIntent().getSerializableExtra(EXTRA_PLAYLIST);
-        currentSongIndex = getIntent().getIntExtra(EXTRA_CURRENT_SONG_INDEX, 0);
+        int currentSongIndex = getIntent().getIntExtra(EXTRA_CURRENT_SONG_INDEX, 0);
 
         if (playlist != null && playlist.songs != null) {
-            adapter = new PlaylistAdapter(playlist.songs, currentSongIndex, new PlaylistAdapter.OnSongClickListener() {
+            PlaylistAdapter adapter = new PlaylistAdapter(playlist.songs, currentSongIndex, new PlaylistAdapter.OnSongClickListener() {
                 @Override
                 public void onSongClick(PlaylistData.Song song, int position) {
                     playSong(position);
@@ -74,34 +72,13 @@ public class PlaylistActivity extends AppCompatActivity {
 
         PlaylistData.Song song = playlist.songs.get(index);
         Toast.makeText(this, "正在获取歌曲播放链接: " + song.name, Toast.LENGTH_SHORT).show();
-
-        // 在后台线程获取歌曲播放链接
-        new Thread(() -> {
-            Future<SongData> future = MusicService.getSongUrl(song.id, QualityLevel.STANDARD);
-            try {
-                assert future != null;
-                SongData songData = future.get();
-                if (songData != null && (songData.status == 200 || (songData.getUrl() != null && !songData.getUrl().isEmpty()))) {
-                    // 返回结果给DashboardFragment
-                    setResult(RESULT_OK, getIntent()
-                            .putExtra("song_data", songData)
-                            .putExtra("song_index", index));
-                    runOnUiThread(() -> {
-                        Toast.makeText(PlaylistActivity.this, "开始播放: " + song.name, Toast.LENGTH_SHORT).show();
-                        finish();
-                    });
-                } else {
-                    runOnUiThread(() -> {
-                        Toast.makeText(PlaylistActivity.this, "无法获取歌曲播放链接: " + song.name, Toast.LENGTH_SHORT).show();
-                    });
-                }
-            } catch (InterruptedException | ExecutionException e) {
-                Log.e(TAG, "获取歌曲链接失败", e);
-                runOnUiThread(() -> {
-                    Toast.makeText(PlaylistActivity.this, "获取歌曲链接失败: " + song.name, Toast.LENGTH_SHORT).show();
-                });
-            }
-        }).start();
+        // 返回结果给DashboardFragment
+        setResult(RESULT_OK, getIntent()
+                .putExtra("song_index", index));
+        runOnUiThread(() -> {
+            Toast.makeText(PlaylistActivity.this, "开始播放: " + song.name, Toast.LENGTH_SHORT).show();
+            finish();
+        });
     }
 }
 

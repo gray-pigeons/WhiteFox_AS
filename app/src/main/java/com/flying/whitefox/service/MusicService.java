@@ -1,7 +1,6 @@
 package com.flying.whitefox.service;
 
 
-import static java.security.AccessController.getContext;
 
 import android.os.Looper;
 import android.util.Log;
@@ -62,16 +61,20 @@ public class MusicService {
             try {
                 PlaylistData cachedPlaylist = LoadPlayListByCache();
                 if (cachedPlaylist != null) {
+                    Log.d(TAG, "从缓存加载歌单成功: " + cachedPlaylist.name + ", 歌曲数量: " + (cachedPlaylist.songs != null ? cachedPlaylist.songs.size() : 0));
                     return cachedPlaylist;
                 }
                 Future<PlaylistData> future = getPlaylist(playlistId);
-                return future.get();
+                PlaylistData result = future.get();
+                Log.d(TAG, "从网络加载歌单完成");
+                return result;
             } catch (InterruptedException | ExecutionException e) {
                 Log.e(TAG, "加载歌单失败", e);
                 throw new RuntimeException(e);
             }
         }).thenCompose(playlist -> {
             if (playlist != null && playlist.songs != null && !playlist.songs.isEmpty()) {
+                Log.d(TAG, "歌单验证通过: " + playlist.name + ", 歌曲数量: " + playlist.songs.size());
                 // 保存到缓存
                 synchronized (this) {
                     if (cacheManager != null) {
@@ -80,13 +83,16 @@ public class MusicService {
                 }
                 return CompletableFuture.completedFuture(playlist);
             } else {
-
+                Log.w(TAG, "获取到的歌单为空或没有歌曲，playlist=" + playlist + 
+                    ", songs=" + (playlist != null ? playlist.songs : "null"));
+                
                 // 尝试从缓存加载
                 PlaylistData cachedPlaylist = LoadPlayListByCache();
                 if (cachedPlaylist != null) {
                     Log.d(TAG, "网络加载失败，从缓存加载歌单");
                     return CompletableFuture.completedFuture(cachedPlaylist);
                 } else {
+                    Log.e(TAG, "无法从网络或缓存获取有效歌单");
                     throw new RuntimeException("获取到的歌单为空或没有歌曲");
                 }
             }
@@ -168,7 +174,7 @@ public class MusicService {
      * @param future     结果Future
      * @param requestId  请求ID
      */
-    private static void getPlaylistWithRetry(int playlistId, int retryCount, CompletableFuture<PlaylistData> future, int requestId) {
+    private  void getPlaylistWithRetry(int playlistId, int retryCount, CompletableFuture<PlaylistData> future, int requestId) {
         // 检查请求是否仍然有效
         if (requestId != currentRequestId) {
             Log.d(TAG, "请求已过期，ID: " + requestId + ", 当前ID: " + currentRequestId);
@@ -358,7 +364,7 @@ public class MusicService {
      * @param future     结果Future
      * @param requestId  请求ID
      */
-    private static void retryGetPlaylist(int playlistId, int retryCount, CompletableFuture<PlaylistData> future, int requestId) {
+    private  void retryGetPlaylist(int playlistId, int retryCount, CompletableFuture<PlaylistData> future, int requestId) {
         // 检查请求是否仍然有效
         if (requestId != currentRequestId) {
             Log.d(TAG, "请求已过期(retry)，ID: " + requestId + ", 当前ID: " + currentRequestId);
@@ -391,7 +397,7 @@ public class MusicService {
     /**
      * 取消当前正在进行的请求
      */
-    public static void cancelCurrentRequest() {
+    public  void cancelCurrentRequest() {
         if (currentCall != null && !currentCall.isCanceled()) {
             currentCall.cancel();
             Log.d(TAG, "已取消当前请求");
@@ -404,7 +410,7 @@ public class MusicService {
      * @param songId 网易云歌曲 ID
      * @param level  音质级别
      */
-    public static CompletableFuture<SongData> getSongUrl(String songId, QualityLevel level) {
+    public  CompletableFuture<SongData> getSongUrl(String songId, QualityLevel level) {
         CompletableFuture<SongData> future = new CompletableFuture<>();
         if (songId.isEmpty() || songId.equals("0")) {
             future.complete(null);
@@ -421,11 +427,11 @@ public class MusicService {
     }
 
     // 添加一个重载方法，使用默认音质
-    public static CompletableFuture<SongData> getSongUrl(String songId) {
+    public  CompletableFuture<SongData> getSongUrl(String songId) {
         return getSongUrl(songId, QualityLevel.STANDARD);
     }
 
-    private static void tryNextProxyUrl(String[] proxyUrls, int index, CompletableFuture<SongData> future,
+    private  void tryNextProxyUrl(String[] proxyUrls, int index, CompletableFuture<SongData> future,
                                         String songId, String level) {
         if (index >= proxyUrls.length) {
             if (songId.contains("-")) {
@@ -531,7 +537,7 @@ public class MusicService {
      *
      * @param keyword 搜索关键词
      */
-    public static Future<List<PlaylistData.Song>> searchSong(String keyword) {
+    public Future<List<PlaylistData.Song>> searchSong(String keyword) {
         CompletableFuture<List<PlaylistData.Song>> future = new CompletableFuture<>();
 
         String url = "https://api.bzqll.com/music/tencent/search?key=" + keyword + "&limit=20&type=song";

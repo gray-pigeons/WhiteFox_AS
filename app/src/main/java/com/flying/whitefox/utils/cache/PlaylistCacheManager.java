@@ -15,8 +15,8 @@ public class PlaylistCacheManager {
     private static final String CACHE_TIMESTAMP = "cache_timestamp";
     private static final long CACHE_DURATION = 6 * 60 * 60 * 1000; // 6小时
 
-    private SharedPreferences sharedPreferences;
-    private Gson gson;
+    private final SharedPreferences sharedPreferences;
+    private final Gson gson;
 
     public PlaylistCacheManager(Context context) {
         sharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);

@@ -8,16 +8,14 @@ import android.os.IBinder;
 import android.util.Log;
 
 import com.flying.whitefox.data.model.music.PlaylistData;
-import com.flying.whitefox.data.model.music.SongData;
 import com.flying.whitefox.data.model.music.PlayMode;
 
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MusicPlaybackManager {
     private static final String TAG = "MusicPlaybackManager";
 
-    private Context context;
+    private final Context context;
     private MusicPlaybackService musicPlaybackService;
     private MusicService musicService;
     private boolean isServiceBound = false;
@@ -64,6 +62,8 @@ public class MusicPlaybackManager {
                 @Override
                 public void onCompletion() {
                     playNextSong();
+                    // 确保在播放完成后更新UI状态
+                    updatePlaybackState();
                 }
 
                 @Override
@@ -71,6 +71,8 @@ public class MusicPlaybackManager {
                     if (playbackStateListener != null) {
                         playbackStateListener.onError(error);
                     }
+                    // 发生错误时也更新UI状态
+                    updatePlaybackState();
                 }
 
                 @Override
@@ -111,7 +113,7 @@ public class MusicPlaybackManager {
 
     public void loadPlaylist(int playlistId, boolean forceRefresh) {
         if (musicService == null) return;
-
+        musicService.cancelCurrentRequest();
         musicService.getPlaylistAsync(playlistId)
                 .thenAccept(playlist -> {
                     currentPlaylist = playlist;
@@ -254,6 +256,7 @@ public class MusicPlaybackManager {
 
             PlaybackState state = new PlaybackState(isPlaying, currentPosition, duration, playMode);
             playbackStateListener.onPlaybackStateChanged(state);
+            Log.d(TAG, "更新播放状态: " + state.isPlaying);
         }
     }
 

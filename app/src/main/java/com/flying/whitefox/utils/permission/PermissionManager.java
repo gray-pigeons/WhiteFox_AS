@@ -104,28 +104,7 @@ public class PermissionManager {
                 });
     }
 
-    @NonNull
-    private static List<IPermission> getList() {
-        List<IPermission> permissions = new ArrayList<>();
-        // 根据Android版本添加相应的权限
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+ 需要单独的媒体权限
-            permissions.add(PermissionLists.getPostNotificationsPermission());
-            permissions.add(PermissionLists.getReadMediaImagesPermission());
-            permissions.add(PermissionLists.getReadMediaVideoPermission());
-            permissions.add(PermissionLists.getReadMediaAudioPermission());
 
-        } else {
-            // Android 12及以下版本使用传统的存储权限
-            permissions.add(PermissionLists.getReadExternalStoragePermission());
-            permissions.add(PermissionLists.getWriteExternalStoragePermission());
-
-        }
-
-        // 添加其他通用权限
-        permissions.add(PermissionLists.getCameraPermission());
-        return permissions;
-    }
 
     /**
      * 检查并申请特定权限
@@ -166,6 +145,29 @@ public class PermissionManager {
                         }
                     }
                 });
+    }
+
+    @NonNull
+    private static List<IPermission> getList() {
+        List<IPermission> permissions = new ArrayList<>();
+        // 根据Android版本添加相应的权限
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ 需要单独的媒体权限
+            permissions.add(PermissionLists.getPostNotificationsPermission());
+            permissions.add(PermissionLists.getReadMediaImagesPermission());
+            permissions.add(PermissionLists.getReadMediaVideoPermission());
+            permissions.add(PermissionLists.getReadMediaAudioPermission());
+
+        } else {
+            // Android 12及以下版本使用传统的存储权限
+            permissions.add(PermissionLists.getReadExternalStoragePermission());
+            permissions.add(PermissionLists.getWriteExternalStoragePermission());
+
+        }
+
+        // 添加其他通用权限
+        permissions.add(PermissionLists.getCameraPermission());
+        return permissions;
     }
 
     /**
